@@ -1,13 +1,13 @@
-import React from "react";
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
-} from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React from "react";
+import {
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 export default function Lobby() {
     const router = useRouter();
@@ -32,7 +32,7 @@ export default function Lobby() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#22D3EE" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Room Lobby</Text>
+                <Text style={styles.headerTitle}>Rommmom Lobby</Text>
                 <View style={{ width: 24 }} />
             </View>
 
