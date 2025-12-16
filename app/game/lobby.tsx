@@ -32,7 +32,7 @@ export default function Lobby() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#22D3EE" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Rommmom Lobby</Text>
+                <Text style={styles.headerTitle}>Room Lobby</Text>
                 <View style={{ width: 24 }} />
             </View>
 
