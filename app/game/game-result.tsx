@@ -20,7 +20,7 @@ type Player = {
   isHost?: boolean;
 };
 
-export default function GameResult(): JSX.Element {
+export default function GameResult() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
