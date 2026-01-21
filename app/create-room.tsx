@@ -1,19 +1,20 @@
-import { Colors } from "@/constants/theme";
+import { Colors, Fonts } from "@/constants/theme";
 import { Room, User } from "@/models/models";
 import { saveData } from "@/services/FirebaseService";
+import { Ionicons } from "@expo/vector-icons";
+import * as Crypto from "expo-crypto";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-
 
 export default function CreateRoom() {
   const colorStyle = Colors.dark;
@@ -21,6 +22,7 @@ export default function CreateRoom() {
 
   const [nickname, setNickname] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const createUser = async () => {
     if (isLoading) return;
@@ -28,8 +30,8 @@ export default function CreateRoom() {
     try {
       setIsLoading(true);
 
-      const userId = crypto.randomUUID();
-      const channelId = crypto.randomUUID();
+      const userId = Crypto.randomUUID();
+      const channelId = Crypto.randomUUID();
 
       const user: User = {
         id: userId,
@@ -55,37 +57,77 @@ export default function CreateRoom() {
     }
   };
 
+  const onJoinRoom = () => {
+    if (isLoading) return;
+
+    if (!nickname.trim()) {
+      setError("Please enter a nickname");
+      return;
+    }
+
+    setError("");
+    router.navigate(`/join-room?player=${nickname.trim()}`);
+  };
+
   return (
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: colorStyle.background }]}
       behavior={Platform.select({ ios: "padding", default: "height" })}
     >
       <View style={styles.container}>
-        {/* Title */}
-        <Text style={[styles.title, { color: colorStyle.tint }]}>
-          MapMystery
-        </Text>
-        <Text style={styles.subtitle}>
-          Play. Guess. Outsmart.
-        </Text>
+        {/* Brand */}
+        <View style={styles.brand}>
+          <Text style={[styles.title, { color: colorStyle.tint }]}>
+            MapMystery
+          </Text>
+          <Text style={[styles.subtitle, { color: colorStyle.tabIconDefault }]}>
+            Play. Guess. Outsmart.
+          </Text>
+        </View>
 
         {/* Card */}
-        <View style={[styles.card, { backgroundColor: colorStyle.card }]}>
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: colorStyle.card,
+              borderColor: colorStyle.border,
+            },
+          ]}
+        >
           {/* Nickname */}
-          <TextInput
-            value={nickname}
-            onChangeText={setNickname}
-            placeholder="Your nickname"
-            placeholderTextColor={colorStyle.tabIconDefault}
+          <Text style={[styles.label, { color: colorStyle.text }]}>
+            Nickname
+          </Text>
+
+          <View
             style={[
-              styles.input,
+              styles.inputWrapper,
               {
-                color: colorStyle.text,
-                borderColor: "#67E8F9",
+                borderColor: error ? "#ff0000" : colorStyle.border,
               },
             ]}
-            editable={!isLoading}
-          />
+          >
+            <Ionicons
+              name="person-outline"
+              size={20}
+              color={colorStyle.tabIconDefault}
+              style={{ marginRight: 8 }}
+            />
+            <TextInput
+              value={nickname}
+              onChangeText={(text) => {
+                setNickname(text);
+                setError("");
+              }}
+              placeholder="Your nickname"
+              placeholderTextColor={colorStyle.tabIconDefault}
+              style={[styles.input, { color: colorStyle.text }]}
+              editable={!isLoading}
+            />
+          </View>
+
+          {error && <Text style={styles.errorText}>{error}</Text>}
 
           {/* Create Room */}
           <Pressable
@@ -94,7 +136,7 @@ export default function CreateRoom() {
             style={({ pressed }) => [
               styles.primaryButton,
               {
-                backgroundColor: "#67E8F9",
+                backgroundColor: colorStyle.tint,
                 opacity: pressed || isLoading ? 0.85 : 1,
               },
             ]}
@@ -102,9 +144,7 @@ export default function CreateRoom() {
             {isLoading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color="#fff" />
-                <Text style={styles.primaryButtonText}>
-                  Creating room...
-                </Text>
+                <Text style={styles.primaryButtonText}>Creating room...</Text>
               </View>
             ) : (
               <Text style={styles.primaryButtonText}>Create Room</Text>
@@ -113,23 +153,26 @@ export default function CreateRoom() {
 
           {/* Join Room */}
           <Pressable
+            onPress={onJoinRoom}
             disabled={isLoading}
             style={({ pressed }) => [
               styles.secondaryButton,
               {
-                borderColor: "#67E8F9",
+                borderColor: colorStyle.tint,
                 opacity: pressed || isLoading ? 0.6 : 1,
               },
             ]}
           >
-            <Text style={[styles.secondaryButtonText, { color: "#67E8F9" }]}>
-              Join Room
+            <Text
+              style={[styles.secondaryButtonText, { color: colorStyle.tint }]}
+            >
+              Join Existing Room
             </Text>
           </Pressable>
         </View>
 
         {/* Footer */}
-        <Pressable>
+        <Pressable style={{ marginTop: 24 }}>
           <Text style={[styles.linkText, { color: colorStyle.tint }]}>
             How to Play
           </Text>
@@ -143,81 +186,119 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+
   container: {
     flex: 1,
-    paddingHorizontal: 32,
-    alignItems: "center",
+    paddingHorizontal: 24,
     justifyContent: "center",
   },
 
-  title: {
-    fontSize: 42,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-    marginBottom: 40,
+  /* Brand */
+  brand: {
+    alignItems: "center",
+    marginBottom: 32,
   },
 
+  title: {
+    fontSize: 36,
+    fontWeight: "800",
+    fontFamily: Fonts.sans,
+    letterSpacing: 0.6,
+  },
+
+  subtitle: {
+    fontSize: 14,
+    marginTop: 6,
+    fontFamily: Fonts.sans,
+    letterSpacing: 0.4,
+  },
+
+  /* Card */
   card: {
-    width: "100%",
-    maxWidth: 420,
-    padding: 28,
-    borderRadius: 28,
+    borderRadius: 22,
+    padding: 24,
+    borderWidth: 1,
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
+    fontFamily: Fonts.sans,
+    letterSpacing: 0.5,
+  },
+
+  inputWrapper: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
 
   input: {
-    width: "100%",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 24,
+    flex: 1,
     fontSize: 16,
-    borderWidth: 2,
-    marginBottom: 20,
-    textAlign: "center",
+    fontFamily: Fonts.sans,
   },
 
-  primaryButton: {
-    width: "100%",
-    paddingVertical: 18,
-    borderRadius: 28,
-    alignItems: "center",
+  errorText: {
+    fontSize: 12,
+    color: "#ff0000",
     marginBottom: 14,
+    fontFamily: Fonts.sans,
   },
+
+  /* Buttons */
+  primaryButton: {
+    height: 56,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+
   primaryButtonText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: "600",
+    fontFamily: Fonts.rounded,
+    letterSpacing: 0.5,
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
   secondaryButton: {
-    width: "100%",
-    paddingVertical: 16,
-    borderRadius: 28,
+    height: 52,
+    borderRadius: 14,
     alignItems: "center",
-    borderWidth: 2,
-  },
-  secondaryButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    marginTop: 14,
   },
 
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    fontFamily: Fonts.sans,
+    letterSpacing: 0.4,
+  },
+
+  /* Footer */
   linkText: {
-    marginTop: 32,
-    fontSize: 16,
-    textDecorationLine: "underline",
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: Fonts.sans,
   },
 });

@@ -1,12 +1,26 @@
+import db from "@/configs/firebase";
+import { Room, User } from "@/models/models";
+import ChannelService from "@/services/ChannelService";
+import { deleteData, getData, saveData } from "@/services/FirebaseService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  collection,
+  doc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import PubNub from "pubnub";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function Lobby() {
@@ -17,20 +31,248 @@ export default function Lobby() {
     roomCode: string;
   }>();
 
-  const isHost = true; // later replace with real host logic
-
-  const [showSettingsEdit, setShowSettingsEdit] = React.useState(false);
-  const [settings, setSettings] = React.useState({
+  const [players, setPlayers] = useState<any[]>([]);
+  const [isHost, setIsHost] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [showSettingsEdit, setShowSettingsEdit] = useState(false);
+  const [settings, setSettings] = useState({
     mode: "Year & Location Guess",
     rounds: 5,
     timer: true,
   });
 
-  const players = [
-    { id: 1, name: "Player 1 (Host)", isHost: true },
-    { id: 2, name: "Player 2", isHost: false },
-    { id: 3, name: "Player 3", isHost: false },
-  ];
+  useEffect(() => {
+    const initializeRoom = async () => {
+      try {
+        const roomData = await getData("rooms", id!);
+        console.log("Fetched room data:", roomData, id);
+        if (!roomData) {
+          router.back();
+          return;
+        }
+
+        const typedRoom: Room = {
+          id: id!,
+          roomCode: roomData.roomCode,
+          creatorId: roomData.creatorId,
+          createdAt: roomData.createdAt,
+        };
+
+        setRoom(typedRoom);
+        setIsHost(roomData.creatorId === userId);
+
+        console.log("Fetching user data...");
+
+        let userData = await getData("users", userId!);
+        if (!userData) {
+          const newUser: User = {
+            id: userId!,
+            nickname: "Player",
+            joinedAt: new Date(),
+          };
+          await saveData("users", newUser);
+          userData = newUser;
+        }
+
+        const typedUser: User = {
+          id: userId!,
+          nickname: userData.nickname,
+          joinedAt: userData.joinedAt,
+        };
+        setCurrentUser(typedUser);
+
+        const pubnub = ChannelService.getChannelConnection(
+          userId!,
+          id!,
+          handlePresenceEvent,
+          async () => {
+            console.log("Channel connection established");
+            setConnectionError("");
+            await fetchPlayerList(id!);
+          },
+          (error: string) => {
+            console.error("Channel connection error:", error);
+            setConnectionError(error);
+          },
+        );
+
+        await fetchPlayerList(id!);
+
+        await fetchGameSettings(id!);
+
+        return () => {
+          cleanupUserSession(userId!);
+          ChannelService.closeChannelConnection();
+        };
+      } catch (error) {
+        console.error("Error initializing room:", error);
+        Alert.alert("Error", "Failed to initialize room");
+        router.back();
+      }
+    };
+
+    if (id && userId) {
+      console.log("Initializing room lobby...");
+      initializeRoom();
+      console.log("Room lobby initialized.");
+    }
+
+    return () => {
+      if (userId) {
+        console.log("Cleaning up user session...");
+        cleanupUserSession(userId);
+      }
+    };
+  }, [id, userId]);
+
+  useEffect(() => {
+    const saveUserSession = async () => {
+      if (!id || !userId) return;
+
+      try {
+        const sessionData = {
+          roomId: id,
+          userId: userId,
+          joinedAt: new Date(),
+        };
+
+        const roomSessionsRef = collection(db, "roomSessions");
+        const q = query(
+          roomSessionsRef,
+          where("roomId", "==", id),
+          where("userId", "==", userId),
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+          await saveData("roomSessions", sessionData);
+          console.log("User session saved to Firebase");
+        }
+      } catch (error) {
+        console.error("Error saving user session:", error);
+      }
+    };
+
+    saveUserSession();
+  }, [id, userId]);
+
+  const fetchGameSettings = async (roomId: string) => {
+    try {
+      const gameSettingsData = await getData("gameSettings", roomId);
+      if (gameSettingsData) {
+        setSettings({
+          mode: gameSettingsData.mode || "Year & Location Guess",
+          rounds: gameSettingsData.rounds || 5,
+          timer:
+            gameSettingsData.timer !== undefined
+              ? gameSettingsData.timer
+              : true,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching game settings:", error);
+    }
+  };
+
+  const saveGameSettings = async (newSettings: typeof settings) => {
+    if (!isHost || !id) return;
+
+    try {
+      const existingSettings = await getData("gameSettings", id!);
+
+      if (existingSettings) {
+        const settingsRef = doc(db, "gameSettings", id!);
+        await updateDoc(settingsRef, newSettings);
+      } else {
+        await saveData("gameSettings", { ...newSettings, roomId: id! });
+      }
+
+      console.log("Game settings saved to Firebase");
+      setConnectionError("");
+    } catch (error) {
+      console.error("Error saving game settings:", error);
+      setConnectionError("Failed to save settings");
+    }
+  };
+
+  const handlePresenceEvent = (
+    presence: PubNub.SubscriptionObject.Presence,
+  ) => {
+    console.log("Presence event:", presence);
+    fetchPlayerList(id!);
+    fetchGameSettings(id!);
+  };
+
+  const fetchPlayerList = async (roomId: string) => {
+    try {
+      const roomSessionsRef = collection(db, "roomSessions");
+      const q = query(roomSessionsRef, where("roomId", "==", roomId));
+      const querySnapshot = await getDocs(q);
+
+      const playerList = [];
+
+      for (const docSnapshot of querySnapshot.docs) {
+        const sessionData = docSnapshot.data();
+        try {
+          const userData = await getData("users", sessionData.userId);
+          playerList.push({
+            id: sessionData.userId,
+            name: userData?.nickname || "Unknown",
+            isHost: room?.creatorId === sessionData.userId,
+          });
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          playerList.push({
+            id: sessionData.userId,
+            name: "Unknown",
+            isHost: room?.creatorId === sessionData.userId,
+          });
+        }
+      }
+
+      setPlayers(playerList);
+    } catch (error) {
+      console.error("Error fetching player list:", error);
+    }
+  };
+
+  const cleanupUserSession = async (currentUserId: string) => {
+    try {
+      if (!id) return;
+
+      const roomSessionsRef = collection(db, "roomSessions");
+      const q = query(
+        roomSessionsRef,
+        where("roomId", "==", id),
+        where("userId", "==", currentUserId),
+      );
+      const querySnapshot = await getDocs(q);
+
+      for (const docSnapshot of querySnapshot.docs) {
+        await deleteData("roomSessions", docSnapshot.id);
+      }
+    } catch (error) {
+      console.error("Error cleaning up user session:", error);
+    }
+  };
+
+  const handleStartGame = () => {
+    if (!isHost) {
+      Alert.alert("Error", "Only the host can start the game");
+      return;
+    }
+
+    if (players.length < 2) {
+      Alert.alert("Error", "At least 2 players are required to start");
+      return;
+    }
+
+    router.navigate(
+      `/game/game-board?roomId=${id}&userId=${userId}&roomCode=${roomCode}`,
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -64,7 +306,13 @@ export default function Lobby() {
           {isHost && (
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => setShowSettingsEdit(!showSettingsEdit)}
+              onPress={async () => {
+                if (showSettingsEdit) {
+                  // Save settings when clicking checkmark
+                  await saveGameSettings(settings);
+                }
+                setShowSettingsEdit(!showSettingsEdit);
+              }}
             >
               <Ionicons
                 name={showSettingsEdit ? "checkmark" : "pencil"}
@@ -180,8 +428,18 @@ export default function Lobby() {
         {/* Players */}
         <View style={styles.playerSection}>
           {players.map((player) => (
-            <View key={player.id} style={styles.playerRow}>
-              <Text style={styles.playerName}>{player.name}</Text>
+            <View
+              key={player.id}
+              style={[styles.playerRow, player.isHost && styles.playerRowHost]}
+            >
+              <Text
+                style={[
+                  styles.playerName,
+                  player.isHost && styles.playerNameHost,
+                ]}
+              >
+                {player.name}
+              </Text>
               {player.isHost && (
                 <MaterialCommunityIcons
                   name="crown"
@@ -196,8 +454,22 @@ export default function Lobby() {
 
       {/* Footer */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.startButton}>
-          <Text style={styles.startButtonText}>Start Game</Text>
+        {connectionError && (
+          <Text style={styles.errorText}>{connectionError}</Text>
+        )}
+        <TouchableOpacity
+          style={[
+            styles.startButton,
+            {
+              opacity: isHost && players.length >= 2 ? 1 : 0.5,
+            },
+          ]}
+          onPress={handleStartGame}
+          disabled={!isHost || players.length < 2}
+        >
+          <Text style={styles.startButtonText}>
+            {isHost ? "Start Game" : "Waiting for Host..."}
+          </Text>
         </TouchableOpacity>
         <Text style={styles.statusText}>{players.length} Players Ready</Text>
       </View>
@@ -283,10 +555,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
   },
+  playerRowHost: {
+    backgroundColor: "#1F3A5F", // Darker blue background for host
+    borderLeftWidth: 4,
+    borderLeftColor: "#F59E0B", // Gold border on left
+  },
   playerName: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",
+  },
+  playerNameHost: {
+    color: "#F59E0B", // Gold text for host
+    fontWeight: "700",
+    fontSize: 17,
   },
   footer: {
     position: "absolute",
@@ -316,6 +598,12 @@ const styles = StyleSheet.create({
   statusText: {
     color: "#64748B", // Slate 500
     fontSize: 14,
+  },
+  errorText: {
+    color: "#FF6B6B",
+    fontSize: 12,
+    marginBottom: 12,
+    textAlign: "center",
   },
   sectionHeader: {
     flexDirection: "row",

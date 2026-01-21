@@ -5,19 +5,26 @@ import {
   deleteDoc,
   doc,
   DocumentData,
-  getDoc,
+  getDocs,
+  query,
   updateDoc,
+  where,
 } from "firebase/firestore";
 
 import db from "../configs/firebase";
 
-export type CollectionTypes = "rooms" | "users" | "games";
+export type CollectionTypes =
+  | "rooms"
+  | "users"
+  | "games"
+  | "roomSessions"
+  | "gameSettings";
 
 /**
  * Get a collection reference
  */
 export const getCollection = (
-  collectionName: CollectionTypes
+  collectionName: CollectionTypes,
 ): CollectionReference<DocumentData> => {
   return collection(db, collectionName);
 };
@@ -25,22 +32,28 @@ export const getCollection = (
 /**
  * Save new document
  */
-export const saveData = async (
-  collectionName: CollectionTypes,
-  data: any
-) => {
+export const saveData = async (collectionName: CollectionTypes, data: any) => {
   return await addDoc(collection(db, collectionName), data);
 };
 
 /**
- * Get document by ID
+ * Get document by ID field (using where clause)
  */
 export const getData = async (
   collectionName: CollectionTypes,
-  docId: string
+  docId: string,
 ) => {
-  const snapshot = await getDoc(doc(db, collectionName, docId));
-  return snapshot.exists() ? snapshot.data() : null;
+  const q = query(collection(db, collectionName), where("id", "==", docId));
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    console.log(`No document found in ${collectionName} with id: ${docId}`);
+    return null;
+  }
+
+  const data = querySnapshot.docs[0].data();
+  console.log(`Fetched data from ${collectionName} with id ${docId}:`, data);
+  return data;
 };
 
 /**
@@ -49,7 +62,7 @@ export const getData = async (
 export const updateData = async (
   collectionName: CollectionTypes,
   docId: string,
-  data: any
+  data: any,
 ) => {
   return await updateDoc(doc(db, collectionName, docId), data);
 };
@@ -59,7 +72,7 @@ export const updateData = async (
  */
 export const deleteData = async (
   collectionName: CollectionTypes,
-  docId: string
+  docId: string,
 ) => {
   return await deleteDoc(doc(db, collectionName, docId));
 };

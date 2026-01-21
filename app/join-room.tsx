@@ -1,9 +1,15 @@
 import { Colors, Fonts } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import db from "@/configs/firebase";
+import { Room, User } from "@/models/models";
+import * as Crypto from "expo-crypto";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   TextInput,
@@ -15,64 +21,136 @@ import {
 export default function JoinRoom() {
   const scheme = useColorScheme();
   const theme = Colors[scheme ?? "dark"];
+  const [error, setError] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { player } = useLocalSearchParams<{ player: string }>();
+
+  const onJoinRoom = async () => {
+    // Validate room code
+    if (!roomCode.trim()) {
+      setError("Please enter a room code");
+      return;
+    }
+
+    setError("");
+    setIsLoading(true);
+
+    try {
+      // Query for room with matching room code
+      const roomsRef = collection(db, "rooms");
+      const q = query(
+        roomsRef,
+        where("roomCode", "==", roomCode.trim().toUpperCase()),
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        setError("No room found with that code");
+        setIsLoading(false);
+        return;
+      }
+
+      const room = querySnapshot.docs[0].data() as Room;
+      const userId = Crypto.randomUUID();
+      const user: User = {
+        id: userId,
+        nickname: player?.trim() || "Player",
+        joinedAt: new Date(),
+      };
+
+      // Navigate to lobby
+      router.navigate(
+        `/game/lobby?id=${room.id}&userId=${userId}&roomCode=${room.roomCode}`,
+      );
+    } catch (err) {
+      setError("Unable to connect to room. Please try again.");
+      console.error("Error joining room:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={theme.tint} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            Join a Room
-          </Text>
         </View>
 
-        {/* Room Code */}
-        <View
-          style={[
-            styles.codeWrapper,
-            {
-              borderColor: theme.tint,
-              shadowColor: theme.shadow,
-            },
-          ]}
-        >
-          <View style={[styles.codeInner, { backgroundColor: theme.card }]}>
-            <Text style={[styles.roomCode, { color: theme.text }]}>G4T7R3</Text>
-          </View>
-        </View>
-
-        <View style={{ flex: 1 }} />
-
-        {/* Bottom Section */}
-        <View style={styles.bottomSection}>
-          {/* Nickname */}
-          <Text style={[styles.label, { color: theme.text }]}>
-            Your Nickname
+        {/* Content */}
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: theme.text }]}>Join a Room</Text>
+          <Text style={[styles.subtitle, { color: theme.tabIconDefault }]}>
+            Enter the room code shared by the host
           </Text>
 
-          <TextInput
-            placeholder="AwesomePlayer"
-            placeholderTextColor={theme.tabIconDefault}
+          {/* Card */}
+          <View
             style={[
-              styles.input,
+              styles.card,
               {
                 backgroundColor: theme.card,
                 borderColor: theme.border,
-                color: theme.text,
               },
             ]}
-          />
-
-          {/* Join Button */}
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: theme.button }]}
-            activeOpacity={0.85}
           >
-            <Text style={styles.buttonText}>Join</Text>
-          </TouchableOpacity>
+            <Text style={[styles.label, { color: theme.text }]}>Room Code</Text>
+
+            <View
+              style={[
+                styles.inputWrapper,
+                {
+                  borderColor: error ? "#ff0000" : theme.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="key-outline"
+                size={20}
+                color={theme.tabIconDefault}
+                style={{ marginRight: 8 }}
+              />
+              <TextInput
+                placeholder="G4T7R3"
+                placeholderTextColor={theme.tabIconDefault}
+                value={roomCode}
+                onChangeText={(text) => {
+                  setRoomCode(text);
+                  setError("");
+                }}
+                editable={!isLoading}
+                autoCapitalize="characters"
+                style={[styles.input, { color: theme.text }]}
+              />
+            </View>
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
+            <TouchableOpacity
+              style={[
+                styles.button,
+                {
+                  backgroundColor: isLoading
+                    ? theme.tabIconDefault
+                    : theme.button,
+                },
+              ]}
+              activeOpacity={0.9}
+              onPress={onJoinRoom}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>Join Room</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -91,71 +169,85 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  headerTitle: {
-    position: "absolute",
-    alignSelf: "center",
-    fontSize: 28,
-    fontWeight: "700",
-    fontFamily: Fonts.sans,
-  },
-
-  /* Room Code */
-  codeWrapper: {
-    marginTop: 50,
-    borderWidth: 2,
-    borderRadius: 16,
-    padding: 6,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-
-  codeInner: {
-    borderRadius: 12,
-    paddingVertical: 24,
+  /* Content */
+  content: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
   },
 
-  roomCode: {
-    fontSize: 32,
-    letterSpacing: 4,
-    fontFamily: Fonts.mono,
-    fontWeight: "600",
+  title: {
+    fontSize: 30,
+    fontWeight: "700",
+    fontFamily: Fonts.sans,
+    marginBottom: 6,
   },
 
-  /* Bottom Section */
-  bottomSection: {
-    marginBottom: 24,
+  subtitle: {
+    fontSize: 14,
+    marginBottom: 32,
+    fontFamily: Fonts.sans,
+    textAlign: "center",
+  },
+
+  /* Card */
+  card: {
+    width: "100%",
+    maxWidth: 420,
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 4,
   },
 
   label: {
-    fontSize: 16,
+    fontSize: 13,
+    fontWeight: "600",
     marginBottom: 8,
     fontFamily: Fonts.sans,
+    letterSpacing: 0.6,
+  },
+
+  inputWrapper: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
 
   input: {
-    height: 52,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 16,
+    flex: 1,
     fontSize: 16,
     fontFamily: Fonts.sans,
-    marginBottom: 20,
+    letterSpacing: 1.2,
+  },
+
+  errorText: {
+    color: "#ff0000",
+    fontSize: 12,
+    marginBottom: 16,
+    fontFamily: Fonts.sans,
   },
 
   button: {
     height: 56,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 8,
   },
 
   buttonText: {
     color: "#FFFFFF",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     fontFamily: Fonts.rounded,
+    letterSpacing: 0.6,
   },
 });
