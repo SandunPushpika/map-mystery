@@ -6,7 +6,9 @@ import {
   getData,
   getDocumentReference,
   listenToGameSettings,
+  listenToGameStatus,
   saveData,
+  saveGameStatus,
 } from "@/services/FirebaseService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -181,6 +183,18 @@ export default function Lobby() {
     };
   }, [id]);
 
+  useEffect(() => {
+    const unsubscribe = listenToGameStatus(id!, (gameStatusData: any) => {
+      if (gameStatusData && gameStatusData.isStarted) {
+        navigateToGameBoard();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isHost]);
+
   const saveGameSettings = async (newSettings: typeof settings) => {
     if (!isHost || !id) return;
 
@@ -268,7 +282,7 @@ export default function Lobby() {
     }
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (!isHost) {
       Alert.alert("Error", "Only the host can start the game");
       return;
@@ -279,6 +293,20 @@ export default function Lobby() {
       return;
     }
 
+    await onGameStart();
+  };
+
+  const onGameStart = async () => {
+    console.log("Game is starting...");
+    await saveGameStatus({
+      isStarted: true,
+      startedAt: new Date(),
+      roomId: id!,
+    });
+    navigateToGameBoard();
+  };
+
+  const navigateToGameBoard = () => {
     router.navigate(
       `/game/game-board?roomId=${id}&userId=${userId}&roomCode=${roomCode}`,
     );

@@ -12,6 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 
+import { GameStatus } from "@/models/models";
 import db from "../configs/firebase";
 
 export type CollectionTypes =
@@ -122,6 +123,46 @@ export const listenToGameSettings = (
   );
 
   return unsubscribe;
+};
+
+export const listenToGameStatus = (
+  roomId: string,
+  onGameStatus: (data: any) => void,
+) => {
+  const q = query(collection(db, "gameStatus"), where("roomId", "==", roomId));
+  const unsubscribe = onSnapshot(
+    q,
+    (querySnapshot) => {
+      if (querySnapshot.empty) {
+        console.log(`No gameStatus found for roomId: ${roomId}`);
+        onGameStatus(null);
+        return;
+      }
+
+      const data = querySnapshot.docs[0].data();
+      onGameStatus(data);
+    },
+    (error) => {
+      console.error("Error listening to game status:", error);
+    },
+  );
+
+  return unsubscribe;
+};
+
+export const saveGameStatus = async (data: GameStatus) => {
+  const q = query(
+    collection(db, "gameStatus"),
+    where("roomId", "==", data.roomId),
+  );
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    return await addDoc(collection(db, "gameStatus"), data);
+  } else {
+    const docRef = querySnapshot.docs[0].ref;
+    return await updateDoc(docRef, data as any);
+  }
 };
 
 export default {
