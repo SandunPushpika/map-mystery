@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import db from "@/configs/firebase";
 import { Room, User } from "@/models/models";
+import { saveData } from "@/services/FirebaseService";
 import * as Crypto from "expo-crypto";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { collection, getDocs, query, where } from "firebase/firestore";
@@ -28,7 +29,6 @@ export default function JoinRoom() {
   const { player } = useLocalSearchParams<{ player: string }>();
 
   const onJoinRoom = async () => {
-    // Validate room code
     if (!roomCode.trim()) {
       setError("Please enter a room code");
       return;
@@ -38,7 +38,6 @@ export default function JoinRoom() {
     setIsLoading(true);
 
     try {
-      // Query for room with matching room code
       const roomsRef = collection(db, "rooms");
       const q = query(
         roomsRef,
@@ -59,8 +58,7 @@ export default function JoinRoom() {
         nickname: player?.trim() || "Player",
         joinedAt: new Date(),
       };
-
-      // Navigate to lobby
+      await saveData("users", user);
       router.navigate(
         `/game/lobby?id=${room.id}&userId=${userId}&roomCode=${room.roomCode}`,
       );

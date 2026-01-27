@@ -1,12 +1,17 @@
 import db from "@/configs/firebase";
 import { Room, User } from "@/models/models";
 import ChannelService from "@/services/ChannelService";
-import { deleteData, getData, saveData } from "@/services/FirebaseService";
+import {
+  deleteData,
+  getData,
+  getDocumentReference,
+  listenToGameSettings,
+  saveData,
+} from "@/services/FirebaseService";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   collection,
-  doc,
   getDocs,
   query,
   updateDoc,
@@ -59,7 +64,7 @@ export default function Lobby() {
           creatorId: roomData.creatorId,
           createdAt: roomData.createdAt,
         };
-
+        console.log("Creator and user ID:", roomData.creatorId, userId);
         setRoom(typedRoom);
         setIsHost(roomData.creatorId === userId);
 
@@ -90,7 +95,7 @@ export default function Lobby() {
           async () => {
             console.log("Channel connection established");
             setConnectionError("");
-            await fetchPlayerList(id!);
+            await fetchPlayerList(id!, typedRoom);
           },
           (error: string) => {
             console.error("Channel connection error:", error);
@@ -98,9 +103,7 @@ export default function Lobby() {
           },
         );
 
-        await fetchPlayerList(id!);
-
-        await fetchGameSettings(id!);
+        await fetchPlayerList(id!, typedRoom);
 
         return () => {
           cleanupUserSession(userId!);
@@ -158,9 +161,9 @@ export default function Lobby() {
     saveUserSession();
   }, [id, userId]);
 
-  const fetchGameSettings = async (roomId: string) => {
-    try {
-      const gameSettingsData = await getData("gameSettings", roomId);
+  useEffect(() => {
+    const unsubscribe = listenToGameSettings(id!, (gameSettingsData) => {
+      console.log("Received game settings update:", gameSettingsData);
       if (gameSettingsData) {
         setSettings({
           mode: gameSettingsData.mode || "Year & Location Guess",
@@ -171,10 +174,12 @@ export default function Lobby() {
               : true,
         });
       }
-    } catch (error) {
-      console.error("Error fetching game settings:", error);
-    }
-  };
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [id]);
 
   const saveGameSettings = async (newSettings: typeof settings) => {
     if (!isHost || !id) return;
@@ -183,10 +188,14 @@ export default function Lobby() {
       const existingSettings = await getData("gameSettings", id!);
 
       if (existingSettings) {
-        const settingsRef = doc(db, "gameSettings", id!);
-        await updateDoc(settingsRef, newSettings);
+        const settingsRef = await getDocumentReference("gameSettings", id!);
+        await updateDoc(settingsRef!, newSettings);
       } else {
-        await saveData("gameSettings", { ...newSettings, roomId: id! });
+        await saveData("gameSettings", {
+          ...newSettings,
+          roomId: id!,
+          id: id!,
+        });
       }
 
       console.log("Game settings saved to Firebase");
@@ -201,11 +210,10 @@ export default function Lobby() {
     presence: PubNub.SubscriptionObject.Presence,
   ) => {
     console.log("Presence event:", presence);
-    fetchPlayerList(id!);
-    fetchGameSettings(id!);
+    if (room) fetchPlayerList(id!, room);
   };
 
-  const fetchPlayerList = async (roomId: string) => {
+  const fetchPlayerList = async (roomId: string, currentRoom: Room) => {
     try {
       const roomSessionsRef = collection(db, "roomSessions");
       const q = query(roomSessionsRef, where("roomId", "==", roomId));
@@ -217,17 +225,19 @@ export default function Lobby() {
         const sessionData = docSnapshot.data();
         try {
           const userData = await getData("users", sessionData.userId);
+          console.log(currentRoom);
+
           playerList.push({
             id: sessionData.userId,
             name: userData?.nickname || "Unknown",
-            isHost: room?.creatorId === sessionData.userId,
+            isHost: currentRoom?.creatorId === userData!.id,
           });
         } catch (error) {
           console.error("Error fetching user data:", error);
           playerList.push({
             id: sessionData.userId,
             name: "Unknown",
-            isHost: room?.creatorId === sessionData.userId,
+            isHost: currentRoom?.creatorId === sessionData.userId,
           });
         }
       }
@@ -428,18 +438,8 @@ export default function Lobby() {
         {/* Players */}
         <View style={styles.playerSection}>
           {players.map((player) => (
-            <View
-              key={player.id}
-              style={[styles.playerRow, player.isHost && styles.playerRowHost]}
-            >
-              <Text
-                style={[
-                  styles.playerName,
-                  player.isHost && styles.playerNameHost,
-                ]}
-              >
-                {player.name}
-              </Text>
+            <View key={player.id} style={styles.playerRow}>
+              <Text style={styles.playerName}>{player.name}</Text>
               {player.isHost && (
                 <MaterialCommunityIcons
                   name="crown"
@@ -555,20 +555,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 12,
   },
-  playerRowHost: {
-    backgroundColor: "#1F3A5F", // Darker blue background for host
-    borderLeftWidth: 4,
-    borderLeftColor: "#F59E0B", // Gold border on left
-  },
   playerName: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",
-  },
-  playerNameHost: {
-    color: "#F59E0B", // Gold text for host
-    fontWeight: "700",
-    fontSize: 17,
   },
   footer: {
     position: "absolute",

@@ -6,6 +6,7 @@ import {
   doc,
   DocumentData,
   getDocs,
+  onSnapshot,
   query,
   updateDoc,
   where,
@@ -57,6 +58,26 @@ export const getData = async (
 };
 
 /**
+ * Get document by ID field (using where clause)
+ */
+export const getDocumentReference = async (
+  collectionName: CollectionTypes,
+  docId: string,
+) => {
+  const q = query(collection(db, collectionName), where("id", "==", docId));
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    console.log(`No document found in ${collectionName} with id: ${docId}`);
+    return null;
+  }
+
+  const data = querySnapshot.docs[0].ref;
+  console.log(`Fetched data from ${collectionName} with id ${docId}:`, data);
+  return data;
+};
+
+/**
  * Update document
  */
 export const updateData = async (
@@ -75,6 +96,32 @@ export const deleteData = async (
   docId: string,
 ) => {
   return await deleteDoc(doc(db, collectionName, docId));
+};
+
+export const listenToGameSettings = (
+  roomId: string,
+  onChange: (data: any) => void,
+) => {
+  const q = query(collection(db, "gameSettings"), where("id", "==", roomId));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (querySnapshot) => {
+      if (querySnapshot.empty) {
+        console.log(`No gameSettings found for roomId: ${roomId}`);
+        onChange(null);
+        return;
+      }
+
+      const data = querySnapshot.docs[0].data();
+      onChange(data);
+    },
+    (error) => {
+      console.error("Error listening to game settings:", error);
+    },
+  );
+
+  return unsubscribe;
 };
 
 export default {
