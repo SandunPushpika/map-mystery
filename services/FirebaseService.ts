@@ -20,7 +20,8 @@ export type CollectionTypes =
   | "users"
   | "games"
   | "roomSessions"
-  | "gameSettings";
+  | "gameSettings"
+  | "gameStatus";
 
 /**
  * Get a collection reference

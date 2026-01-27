@@ -18,8 +18,10 @@ export interface GameStatus {
   roomId: string;
 }
 
+type GameMode = "Year & Location Guess" | "Location Only";
+
 export interface GameSettings {
-  mode: string;
+  mode: GameMode;
   rounds: number;
   timer: boolean;
   roomId: string;
