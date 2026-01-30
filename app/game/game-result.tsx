@@ -1,11 +1,10 @@
+import LocationViewer from "@/components/LocationViewer";
 import { Colors } from "@/constants/theme";
-import Slider from "@react-native-community/slider";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Animated,
-  Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,15 +21,15 @@ type Player = {
 
 export default function GameResult() {
   const router = useRouter();
+  const { roomId, userId, currentRound } = useLocalSearchParams<{
+    roomId: string;
+    userId: string;
+    currentRound: string;
+  }>();
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
 
-  /* ---------------- GAME DATA ---------------- */
-  const years = [1880, 1900, 1920, 1950, 1960, 1980, 2010, 2020];
   const correctYear = 1905;
-
-  const [selectedYearIndex, setSelectedYearIndex] = useState(2);
-  const selectedYear = years[selectedYearIndex];
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [earnedScore, setEarnedScore] = useState<number | null>(null);
@@ -41,151 +40,83 @@ export default function GameResult() {
     { name: "Player 3", score: 50, diff: 50 },
   ];
 
-  /* ---------------- SCORE LOGIC ---------------- */
-  const submitGuess = () => {
-    const distance = Math.abs(selectedYear - correctYear);
-    const score = Math.max(0, 100 - distance);
-
-    setEarnedScore(score);
-    setIsSubmitted(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  /* ---------------- NAV BUTTON ANIMATION ---------------- */
   const scaleNext = useRef(new Animated.Value(1)).current;
 
   const goNext = () => {
-    Animated.sequence([
-      Animated.timing(scaleNext, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleNext, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start(() => router.push("/"));
+    const round = parseInt(currentRound) + 1;
+    router.navigate(
+      `/game/game-board?roomId=${roomId}&userId=${userId}&currentRound=${round}`,
+    );
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <Text style={[styles.roundText, { color: theme.text }]}>
-        Round 1 Results
+        {`Round ${currentRound} Results`}
       </Text>
 
       {/* Correct Location */}
-            <Text style={styles.correctYearText}>Correct Location & Year</Text>
+      <Text style={styles.correctYearText}>Correct Location</Text>
 
       {/* Result Card */}
-      <View style={[styles.card, { backgroundColor: theme.card }]}>
+      <View style={[styles.card]}>
         <View style={styles.contentRow}>
-          <View style={styles.textBlock}>
-            <Text style={[styles.location, { color: theme.text }]}>
-              Paris, France
-            </Text>
-            <Text style={styles.year}>
-              {isSubmitted ? correctYear : selectedYear}
-            </Text>
-          </View>
-
-          <Image
-            source={{
-              uri: "https://maps.googleapis.com/maps/api/staticmap?center=Paris,France&zoom=12&size=300x300&markers=color:red|Paris,France",
-            }}
-            style={styles.mapImage}
+          <LocationViewer
+            initialLocation={{ lat: 48.8584, lng: 2.2945 }}
+            textColor={theme.text}
           />
         </View>
       </View>
 
       {/* TIMELINE */}
       <View style={styles.timeline}>
-        <Text style={styles.correctYearText}>Correct Location & Year</Text>
-        <Text style={styles.correctYear}>
-          {isSubmitted ? correctYear : selectedYear}
-        </Text>
-
-        <View style={styles.yearsRow}>
-          {years.map((year) => (
-            <Text key={year} style={styles.yearLabel}>
-              {year}
-            </Text>
-          ))}
-        </View>
-
-        <Slider
-          style={{ width: "100%", height: 40 }}
-          minimumValue={0}
-          maximumValue={years.length - 1}
-          step={1}
-          value={selectedYearIndex}
-          disabled={isSubmitted}
-          minimumTrackTintColor="#6ED3E9"
-          maximumTrackTintColor="#2A2F45"
-          thumbTintColor={isSubmitted ? "#555" : "#6ED3E9"}
-          onValueChange={(value) => {
-            if (!isSubmitted) {
-              setSelectedYearIndex(value);
-              Haptics.selectionAsync();
-            }
-          }}
-        />
+        <Text style={styles.correctYearText}>Correct Year</Text>
+        <Text style={styles.correctYear}>{correctYear}</Text>
       </View>
-
-      {/* SUBMIT */}
-      {!isSubmitted && (
-        <TouchableOpacity style={styles.submitButton} onPress={submitGuess}>
-          <Text style={styles.submitText}>Submit Guess</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* RESULT */}
-      {isSubmitted && (
-        <View style={styles.resultBox}>
-          <Text style={styles.resultText}>
-            You were off by {Math.abs(selectedYear - correctYear)} years
-          </Text>
-          <Text style={styles.scoreEarned}>+{earnedScore} Points</Text>
-        </View>
-      )}
 
       {/* PLAYERS */}
       <Text style={[styles.sectionTitle, { color: theme.text }]}>
         Players Scores
       </Text>
 
-      {players.map((player, index) => (
-        <View
-          key={index}
-          style={[
-            styles.scoreItem,
-            { backgroundColor: theme.card },
-            player.isHost && styles.activePlayer,
-          ]}
-        >
-          <View style={styles.playerInfo}>
-            {player.isHost && <Text style={styles.crown}>👑</Text>}
-            <Text style={[styles.playerText, { color: theme.text }]}>
-              {player.name}
+      <ScrollView
+        style={styles.scoreList}
+        contentContainerStyle={styles.scoreListContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {players.map((player, index) => (
+          <View
+            key={index}
+            style={[
+              styles.scoreItem,
+              { backgroundColor: theme.card },
+              player.isHost && styles.activePlayer,
+            ]}
+          >
+            <View style={styles.playerInfo}>
+              {player.isHost && <Text style={styles.crown}>👑</Text>}
+              <Text style={[styles.playerText, { color: theme.text }]}>
+                {player.name}
+              </Text>
+            </View>
+
+            <Text style={[styles.scoreText, { color: theme.text }]}>
+              {player.score} (+{player.diff})
             </Text>
           </View>
-
-          <Text style={[styles.scoreText, { color: theme.text }]}>
-            {player.score} (+{player.diff})
-          </Text>
-        </View>
-      ))}
+        ))}
+      </ScrollView>
 
       <Animated.View style={{ transform: [{ scale: scaleNext }] }}>
         <TouchableOpacity
-  style={styles.backButton}
-  onPress={() => animateAndNavigate(scaleNext, () => router.replace("/"))}
->
-  <Text style={styles.backButtonText}>Back to Home</Text>
-</TouchableOpacity>
-
+          style={styles.backButton}
+          onPress={() =>
+            animateAndNavigate(scaleNext, () => router.replace("/"))
+          }
+        >
+          <Text style={styles.backButtonText}>Back to Home</Text>
+        </TouchableOpacity>
       </Animated.View>
 
       <Animated.View style={{ transform: [{ scale: scaleNext }] }}>
@@ -197,9 +128,10 @@ export default function GameResult() {
   );
 }
 
-/* ---------------- STYLES ---------------- */
-
-const animateAndNavigate = (animatedValue: Animated.Value, callback: () => void) => {
+const animateAndNavigate = (
+  animatedValue: Animated.Value,
+  callback: () => void,
+) => {
   Animated.sequence([
     Animated.timing(animatedValue, {
       toValue: 0.95,
@@ -214,7 +146,6 @@ const animateAndNavigate = (animatedValue: Animated.Value, callback: () => void)
   ]).start(callback);
 };
 
-
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
 
@@ -222,7 +153,7 @@ const styles = StyleSheet.create({
 
   card: {
     borderRadius: 20,
-    padding: 20,
+    padding: 5,
     marginBottom: 24,
   },
 
@@ -341,4 +272,11 @@ const styles = StyleSheet.create({
   },
 
   buttonText: { fontSize: 16, fontWeight: "600", color: "#000" },
+
+  scoreList: {
+    maxHeight: 220,
+  },
+  scoreListContent: {
+    paddingBottom: 8,
+  },
 });

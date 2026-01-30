@@ -1,19 +1,22 @@
 import HeaderBar from "@/components/HeaderBar";
+import LocationPicker from "@/components/LocationPicker";
 import RoundImage from "@/components/RoundImage";
 import YearSlider from "@/components/YearSlider";
 import { Colors } from "@/constants/theme";
 import { GameSettings } from "@/models/models";
 import { getData } from "@/services/FirebaseService";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, useColorScheme, View } from "react-native";
 
 export default function GameBoard() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const colorStyle = colorScheme == "dark" ? Colors.dark : Colors.light;
-  const { roomId, userId } = useLocalSearchParams<{
+  const { roomId, userId, currentRound } = useLocalSearchParams<{
     roomId: string;
     userId: string;
+    currentRound: string;
   }>();
 
   const [gameSettings, setGameSettings] = useState<GameSettings | null>();
@@ -22,10 +25,15 @@ export default function GameBoard() {
   const [timeleft, setTime] = useState(30);
   const [year, setYear] = useState(1900);
 
+  const [location, setLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
   useEffect(() => {
     if (timeleft === 0) {
-      nextRound();
-      setTime(30);
+      navigateToResults();
+      return;
     }
 
     const timer = setInterval(() => {
@@ -33,7 +41,7 @@ export default function GameBoard() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeleft, round]);
+  }, [timeleft]);
 
   useEffect(() => {
     fetchGameSettings();
@@ -43,6 +51,12 @@ export default function GameBoard() {
     if (round! < totalRounds) {
       setRound(round! + 1);
     }
+  }
+
+  function navigateToResults() {
+    router.navigate(
+      `/game/game-result?roomId=${roomId}&userId=${userId}&currentRound=${currentRound}`,
+    );
   }
 
   const fetchGameSettings = async () => {
@@ -59,7 +73,6 @@ export default function GameBoard() {
     }
     setGameSettings(existingSettigns as GameSettings);
     setTotalRounds(existingSettigns.rounds);
-    setRound(1);
     console.log("Game Settings:", existingSettigns);
   };
 
@@ -68,22 +81,36 @@ export default function GameBoard() {
       style={[styles.container, { backgroundColor: colorStyle.background }]}
     >
       <HeaderBar
-        current={round || 1}
+        current={parseInt(currentRound) || 1}
         total={totalRounds}
         color={colorStyle.text}
         timeleft={timeleft}
         colorStyle={colorStyle}
       />
+
       <RoundImage />
-      <Text style={[styles.label, { color: colorStyle.text }]}>
-        Year & Location Guess
+
+      <Text style={[styles.modeTitle, { color: colorStyle.text }]}>
+        Guess the Year & Location
       </Text>
+
       <YearSlider
         year={year}
         textcolor={colorStyle.text}
         tintcolor={colorStyle.tint}
-        onYearChange={(year) => setYear(year)}
+        onYearChange={setYear}
       />
+
+      <LocationPicker
+        textColor={colorStyle.text}
+        onLocationSelect={(lat, lng) => setLocation({ lat, lng })}
+      />
+
+      {location && (
+        <Text style={[styles.coords, { color: colorStyle.text }]}>
+          Selected: {location.lat.toFixed(2)}, {location.lng.toFixed(2)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -92,11 +119,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 12,
   },
   label: {
     fontSize: 18,
     fontWeight: "600",
     marginTop: 12,
+  },
+  modeTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginVertical: 12,
+    textAlign: "center",
+  },
+  coords: {
+    marginTop: 8,
+    fontSize: 13,
+    opacity: 0.7,
+    textAlign: "center",
   },
 });

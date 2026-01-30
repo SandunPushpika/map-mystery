@@ -307,7 +307,9 @@ export default function Lobby() {
   };
 
   const navigateToGameBoard = () => {
-    router.navigate(`/game/game-board?roomId=${id}&userId=${userId}`);
+    router.navigate(
+      `/game/game-board?roomId=${id}&userId=${userId}&currentRound=1`,
+    );
   };
 
   return (
