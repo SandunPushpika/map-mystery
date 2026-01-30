@@ -14,7 +14,7 @@ export default function LocationViewer({ initialLocation, textColor }: Props) {
     <View style={styles.container}>
       <MapView
         style={styles.map}
-        pointerEvents="none" // 👈 disables all interactions
+        pointerEvents="none"
         initialRegion={{
           latitude: initialLocation.lat,
           longitude: initialLocation.lng,
