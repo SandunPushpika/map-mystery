@@ -3,8 +3,13 @@ import LocationPicker from "@/components/LocationPicker";
 import RoundImage from "@/components/RoundImage";
 import YearSlider from "@/components/YearSlider";
 import { Colors } from "@/constants/theme";
-import { GameSettings } from "@/models/models";
-import { getData } from "@/services/FirebaseService";
+import { GameResults, GameSettings } from "@/models/models";
+import {
+  getData,
+  getGameResultsByUser,
+  saveData,
+} from "@/services/FirebaseService";
+import { Answer, calculateFinalScore, Guess } from "@/services/ScoreService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, useColorScheme, View } from "react-native";
@@ -23,7 +28,7 @@ export default function GameBoard() {
   const [round, setRound] = useState<number | null>(null);
   const [totalRounds, setTotalRounds] = useState(5);
   const [timeleft, setTime] = useState(30);
-  const [year, setYear] = useState(1900);
+  const [year, setYear] = useState<number | undefined>();
 
   const [location, setLocation] = useState<{
     lat: number;
@@ -53,7 +58,8 @@ export default function GameBoard() {
     }
   }
 
-  function navigateToResults() {
+  async function navigateToResults() {
+    await saveGameResults();
     router.navigate(
       `/game/game-result?roomId=${roomId}&userId=${userId}&currentRound=${currentRound}`,
     );
@@ -76,6 +82,62 @@ export default function GameBoard() {
     console.log("Game Settings:", existingSettigns);
   };
 
+  const saveGameResults = async () => {
+    const guess: Guess = {
+      year: year,
+      lat: location ? location.lat : 0,
+      lng: location ? location.lng : 0,
+    };
+    console.log("Player Guess:", guess);
+    const answer = await getAnswerForRound(parseInt(currentRound) || 1);
+    console.log("Answer for round:", answer);
+
+    const { total } = calculateFinalScore(
+      guess,
+      answer,
+      gameSettings?.mode === "Location Only",
+    );
+
+    const fullTotal = await getTotalMarks(total);
+
+    const player = await getData("users", userId);
+
+    const result: GameResults = {
+      userId: userId,
+      playerName: player?.nickname || "Unknown Player",
+      roomId: roomId,
+      round: parseInt(currentRound) || 1,
+      yearGuess: year || 0,
+      lat: location?.lat || 0,
+      lng: location?.lng || 0,
+      marks: total,
+      totalMarks: fullTotal,
+    };
+    await saveData("gameResults", result);
+  };
+
+  const getTotalMarks = async (currentMarks: number) => {
+    if (currentRound === "1") return currentMarks;
+
+    const qResults = await getGameResultsByUser(
+      roomId,
+      parseInt(currentRound) - 1,
+      userId,
+    );
+    if (!qResults) return currentMarks;
+
+    return ((qResults as any).totalMarks || 0) + currentMarks;
+  };
+
+  const getAnswerForRound = async (round: number) => {
+    const answer: Answer = {
+      year: 1990,
+      lat: 10,
+      lng: 20,
+    };
+    return answer;
+  };
+
   return (
     <View
       style={[styles.container, { backgroundColor: colorStyle.background }]}
@@ -94,12 +156,14 @@ export default function GameBoard() {
         Guess the Year & Location
       </Text>
 
-      <YearSlider
-        year={year}
-        textcolor={colorStyle.text}
-        tintcolor={colorStyle.tint}
-        onYearChange={setYear}
-      />
+      {gameSettings?.mode === "Year & Location Guess" && (
+        <YearSlider
+          year={year || 1900}
+          textcolor={colorStyle.text}
+          tintcolor={colorStyle.tint}
+          onYearChange={setYear}
+        />
+      )}
 
       <LocationPicker
         textColor={colorStyle.text}

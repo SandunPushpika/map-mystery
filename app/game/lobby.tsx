@@ -288,10 +288,10 @@ export default function Lobby() {
       return;
     }
 
-    if (players.length < 2) {
-      Alert.alert("Error", "At least 2 players are required to start");
-      return;
-    }
+    // if (players.length < 2) {
+    //   Alert.alert("Error", "At least 2 players are required to start");
+    //   return;
+    // }
 
     await onGameStart();
   };
@@ -493,7 +493,7 @@ export default function Lobby() {
             },
           ]}
           onPress={handleStartGame}
-          disabled={!isHost || players.length < 2}
+          disabled={false}
         >
           <Text style={styles.startButtonText}>
             {isHost ? "Start Game" : "Waiting for Host..."}

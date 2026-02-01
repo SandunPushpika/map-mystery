@@ -27,3 +27,15 @@ export interface GameSettings {
   roomId: string;
   id: string;
 }
+
+export interface GameResults {
+  userId: string;
+  roomId: string;
+  playerName: string;
+  round: number;
+  yearGuess?: number;
+  lat: number;
+  lng: number;
+  marks: number;
+  totalMarks: number;
+}

@@ -21,7 +21,8 @@ export type CollectionTypes =
   | "games"
   | "roomSessions"
   | "gameSettings"
-  | "gameStatus";
+  | "gameStatus"
+  | "gameResults";
 
 /**
  * Get a collection reference
@@ -36,6 +37,7 @@ export const getCollection = (
  * Save new document
  */
 export const saveData = async (collectionName: CollectionTypes, data: any) => {
+  console.log(`Saving data to ${collectionName}:`, data);
   return await addDoc(collection(db, collectionName), data);
 };
 
@@ -164,6 +166,71 @@ export const saveGameStatus = async (data: GameStatus) => {
     const docRef = querySnapshot.docs[0].ref;
     return await updateDoc(docRef, data as any);
   }
+};
+
+export const getGameResultsByUser = async (
+  roomId: string,
+  round: number,
+  userId: string,
+) => {
+  const q = query(
+    collection(db, "gameResults"),
+    where("roomId", "==", roomId),
+    where("round", "==", round),
+    where("userId", "==", userId),
+  );
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    console.log(`No gameResults found for roomId: ${roomId}, round: ${round}`);
+    return [];
+  }
+  return querySnapshot.docs[0].data();
+};
+
+export const getGameResultsByRoom = async (
+  roomId: string,
+  round: number,
+  userId: string,
+) => {
+  const q = query(
+    collection(db, "gameResults"),
+    where("roomId", "==", roomId),
+    where("round", "==", round),
+  );
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    console.log(`No gameResults found for roomId: ${roomId}, round: ${round}`);
+    return [];
+  }
+  return querySnapshot.docs.map((doc) => doc.data());
+};
+
+export const listenGameResultsByRoom = (
+  roomId: string,
+  round: number,
+  onUpdate: (results: any[]) => void,
+) => {
+  const q = query(
+    collection(db, "gameResults"),
+    where("roomId", "==", roomId),
+    where("round", "==", round),
+  );
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    if (snapshot.empty) {
+      onUpdate([]);
+      return;
+    }
+
+    const results = snapshot.docs.map((doc) => ({
+      ...doc.data(),
+    }));
+
+    onUpdate(results);
+  });
+
+  return unsubscribe;
 };
 
 export default {

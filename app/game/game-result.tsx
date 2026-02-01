@@ -1,7 +1,10 @@
 import LocationViewer from "@/components/LocationViewer";
 import { Colors } from "@/constants/theme";
+import { GameResults } from "@/models/models";
+import { listenGameResultsByRoom } from "@/services/FirebaseService";
+import { Answer } from "@/services/ScoreService";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   ScrollView,
@@ -29,24 +32,50 @@ export default function GameResult() {
   const colorScheme = useColorScheme();
   const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
 
-  const correctYear = 1905;
-
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [earnedScore, setEarnedScore] = useState<number | null>(null);
-
-  const players: Player[] = [
-    { name: "Player 1 (Host)", score: 250, diff: 100, isHost: true },
-    { name: "Player 2", score: 180, diff: 80 },
-    { name: "Player 3", score: 50, diff: 50 },
-  ];
-
+  const [correctYear, setCorrectYear] = useState<number | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number }>({
+    lat: 0,
+    lng: 0,
+  });
+  const [gameResults, setGameResults] = useState<GameResults[]>([]);
   const scaleNext = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!roomId || !userId || !currentRound) return;
+    const unsubscribe = listenGameResultsByRoom(
+      roomId,
+      parseInt(currentRound),
+      (data) => {
+        setGameResults(data);
+        sortToHighestScore();
+      },
+    );
+    return () => unsubscribe();
+  }, [roomId, currentRound]);
+
+  useEffect(() => {
+    setAnswerForRound(parseInt(currentRound));
+  }, [currentRound]);
+
+  const setAnswerForRound = async (round: number) => {
+    const answers: Answer = {
+      year: 1889,
+      lat: 48.8584,
+      lng: 2.2945,
+    };
+    setCorrectYear(answers.year);
+    setLocation({ lat: answers.lat, lng: answers.lng });
+  };
 
   const goNext = () => {
     const round = parseInt(currentRound) + 1;
     router.navigate(
       `/game/game-board?roomId=${roomId}&userId=${userId}&currentRound=${round}`,
     );
+  };
+
+  const sortToHighestScore = () => {
+    gameResults.sort((a, b) => b.totalMarks - a.totalMarks);
   };
 
   return (
@@ -62,20 +91,15 @@ export default function GameResult() {
       {/* Result Card */}
       <View style={[styles.card]}>
         <View style={styles.contentRow}>
-          <LocationViewer
-            initialLocation={{ lat: 48.8584, lng: 2.2945 }}
-            textColor={theme.text}
-          />
+          <LocationViewer initialLocation={location} textColor={theme.text} />
         </View>
       </View>
 
-      {/* TIMELINE */}
       <View style={styles.timeline}>
         <Text style={styles.correctYearText}>Correct Year</Text>
         <Text style={styles.correctYear}>{correctYear}</Text>
       </View>
 
-      {/* PLAYERS */}
       <Text style={[styles.sectionTitle, { color: theme.text }]}>
         Players Scores
       </Text>
@@ -85,24 +109,24 @@ export default function GameResult() {
         contentContainerStyle={styles.scoreListContent}
         showsVerticalScrollIndicator={false}
       >
-        {players.map((player, index) => (
+        {gameResults.map((player, index) => (
           <View
             key={index}
             style={[
               styles.scoreItem,
               { backgroundColor: theme.card },
-              player.isHost && styles.activePlayer,
+              index == 0 && styles.activePlayer,
             ]}
           >
             <View style={styles.playerInfo}>
-              {player.isHost && <Text style={styles.crown}>👑</Text>}
+              {index == 0 && <Text style={styles.crown}>👑</Text>}
               <Text style={[styles.playerText, { color: theme.text }]}>
-                {player.name}
+                {player.playerName}
               </Text>
             </View>
 
             <Text style={[styles.scoreText, { color: theme.text }]}>
-              {player.score} (+{player.diff})
+              {player.totalMarks} (+{player.marks})
             </Text>
           </View>
         ))}
