@@ -22,7 +22,8 @@ export type CollectionTypes =
   | "roomSessions"
   | "gameSettings"
   | "gameStatus"
-  | "gameResults";
+  | "gameResults"
+  | "roundImages";
 
 /**
  * Get a collection reference
@@ -252,6 +253,33 @@ export const deleteExistingGameResult = async (
   );
 
   await Promise.all(deletePromises);
+};
+
+export const deleteExistingRoundImages = async (roomId: string) => {
+  const q = query(collection(db, "roundImages"), where("roomId", "==", roomId));
+
+  const snapshot = await getDocs(q);
+
+  const deletePromises = snapshot.docs.map((d) =>
+    deleteDoc(doc(db, "roundImages", d.id)),
+  );
+
+  await Promise.all(deletePromises);
+};
+
+export const getRoundImage = async (roomId: string, round: number) => {
+  const q = query(
+    collection(db, "roundImages"),
+    where("roomId", "==", roomId),
+    where("round", "==", round),
+  );
+  const querySnapshot = await getDocs(q);
+
+  if (querySnapshot.empty) {
+    console.log(`No roundImages found for roomId: ${roomId}, round: ${round}`);
+    return null;
+  }
+  return querySnapshot.docs[0].data();
 };
 
 export default {

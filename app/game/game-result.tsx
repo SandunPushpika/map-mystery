@@ -3,6 +3,7 @@ import { Colors } from "@/constants/theme";
 import { GameResults } from "@/models/models";
 import {
   getData,
+  getRoundImage,
   listenGameResultsByRoom,
   saveGameStatus,
 } from "@/services/FirebaseService";
@@ -56,10 +57,11 @@ export default function GameResult() {
   }, [currentRound]);
 
   const setAnswerForRound = async (round: number) => {
+    const roundImageResult: any = await getRoundImage(roomId, round);
     const answers: Answer = {
-      year: 1889,
-      lat: 48.8584,
-      lng: 2.2945,
+      year: roundImageResult.year,
+      lat: roundImageResult.lat,
+      lng: roundImageResult.lng,
     };
     setCorrectYear(answers.year);
     setLocation({ lat: answers.lat, lng: answers.lng });

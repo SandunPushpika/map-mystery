@@ -39,3 +39,12 @@ export interface GameResults {
   marks: number;
   totalMarks: number;
 }
+
+export interface RoundImages {
+  round: number;
+  imageUrl: string;
+  year: number;
+  lng: number;
+  lat: number;
+  roomId: string;
+}

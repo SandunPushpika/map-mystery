@@ -8,6 +8,7 @@ import {
   deleteExistingGameResult,
   getData,
   getGameResultsByUser,
+  getRoundImage,
   saveData,
 } from "@/services/FirebaseService";
 import { Answer, calculateFinalScore, Guess } from "@/services/ScoreService";
@@ -30,6 +31,8 @@ export default function GameBoard() {
   const [totalRounds, setTotalRounds] = useState(5);
   const [timeleft, setTime] = useState(30);
   const [year, setYear] = useState<number | undefined>();
+  const [image, setImage] = useState<string>("");
+  const [correctAnswer, setCorrectAnswer] = useState<Answer | null>(null);
 
   const [location, setLocation] = useState<{
     lat: number;
@@ -50,6 +53,7 @@ export default function GameBoard() {
   }, [timeleft]);
 
   useEffect(() => {
+    fetchRoundImage();
     fetchGameSettings();
   }, []);
 
@@ -91,12 +95,11 @@ export default function GameBoard() {
       lng: location ? location.lng : 0,
     };
     console.log("Player Guess:", guess);
-    const answer = await getAnswerForRound(parseInt(currentRound) || 1);
-    console.log("Answer for round:", answer);
+    console.log("Answer for round:", correctAnswer);
 
     const { total } = calculateFinalScore(
       guess,
-      answer,
+      correctAnswer as Answer,
       gameSettings?.mode === "Location Only",
     );
 
@@ -132,13 +135,18 @@ export default function GameBoard() {
     return ((qResults as any).totalMarks || 0) + currentMarks;
   };
 
-  const getAnswerForRound = async (round: number) => {
-    const answer: Answer = {
-      year: 1990,
-      lat: 10,
-      lng: 20,
-    };
-    return answer;
+  const fetchRoundImage = async () => {
+    const roundImage: any = await getRoundImage(
+      roomId,
+      parseInt(currentRound) || 1,
+    );
+    console.log("Round Image Data:", roundImage);
+    setImage(roundImage.imageUrl);
+    setCorrectAnswer({
+      year: roundImage.year,
+      lat: roundImage.lat,
+      lng: roundImage.lng,
+    });
   };
 
   return (
@@ -153,7 +161,7 @@ export default function GameBoard() {
         colorStyle={colorStyle}
       />
 
-      <RoundImage />
+      <RoundImage driveLink={image} />
 
       <Text style={[styles.modeTitle, { color: colorStyle.text }]}>
         {gameSettings?.mode === "Location Only"

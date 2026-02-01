@@ -1,8 +1,10 @@
 import db from "@/configs/firebase";
-import { Room, User } from "@/models/models";
+import { Room, RoundImages, User } from "@/models/models";
 import ChannelService from "@/services/ChannelService";
+import { loadPlaces } from "@/services/CsvService";
 import {
   deleteData,
+  deleteExistingRoundImages,
   getData,
   getDocumentReference,
   listenToGameSettings,
@@ -44,6 +46,7 @@ export default function Lobby() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [showSettingsEdit, setShowSettingsEdit] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState({
     mode: "Year & Location Guess",
     rounds: 5,
@@ -297,13 +300,41 @@ export default function Lobby() {
   };
 
   const onGameStart = async () => {
+    setIsLoading(true);
     console.log("Game is starting...");
+    await generateImages();
     await saveGameStatus({
       isStarted: true,
       startedAt: new Date(),
       roomId: id!,
     });
+    setIsLoading(false);
     navigateToGameBoard();
+  };
+
+  const generateImages = async () => {
+    const places = await loadPlaces();
+    console.log("Loaded places:", places);
+
+    await deleteExistingRoundImages(id!);
+
+    const rounds = settings.rounds;
+    for (let i = 1; i <= rounds; i++) {
+      const randomIndex = Math.floor(Math.random() * places.length);
+      const place = places[randomIndex];
+
+      const roundImageData: RoundImages = {
+        round: i,
+        imageUrl: place.link,
+        year: place.year,
+        lng: place.longitude,
+        lat: place.latitude,
+        roomId: id!,
+      };
+
+      await saveData("roundImages", roundImageData);
+      console.log(`Saved round ${i} image data:`, roundImageData);
+    }
   };
 
   const navigateToGameBoard = () => {
@@ -511,7 +542,11 @@ export default function Lobby() {
           disabled={!isHost || players.length < 2}
         >
           <Text style={styles.startButtonText}>
-            {isHost ? "Start Game" : "Waiting for Host..."}
+            {isHost
+              ? isLoading
+                ? "Starting..."
+                : "Start Game"
+              : "Waiting for Host..."}
           </Text>
         </TouchableOpacity>
         <Text style={styles.statusText}>{players.length} Players Ready</Text>
