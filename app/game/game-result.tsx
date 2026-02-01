@@ -1,7 +1,11 @@
 import LocationViewer from "@/components/LocationViewer";
 import { Colors } from "@/constants/theme";
 import { GameResults } from "@/models/models";
-import { listenGameResultsByRoom } from "@/services/FirebaseService";
+import {
+  getData,
+  listenGameResultsByRoom,
+  saveGameStatus,
+} from "@/services/FirebaseService";
 import { Answer } from "@/services/ScoreService";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -15,22 +19,16 @@ import {
   View,
 } from "react-native";
 
-type Player = {
-  name: string;
-  score: number;
-  diff: number;
-  isHost?: boolean;
-};
-
 export default function GameResult() {
   const router = useRouter();
-  const { roomId, userId, currentRound } = useLocalSearchParams<{
+  const { roomId, userId, currentRound, isLastRound } = useLocalSearchParams<{
     roomId: string;
     userId: string;
     currentRound: string;
+    isLastRound: string;
   }>();
   const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  const theme = Colors.dark;
 
   const [correctYear, setCorrectYear] = useState<number | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number }>({
@@ -46,8 +44,8 @@ export default function GameResult() {
       roomId,
       parseInt(currentRound),
       (data) => {
+        data.sort((a, b) => b.totalMarks - a.totalMarks);
         setGameResults(data);
-        sortToHighestScore();
       },
     );
     return () => unsubscribe();
@@ -71,6 +69,18 @@ export default function GameResult() {
     const round = parseInt(currentRound) + 1;
     router.navigate(
       `/game/game-board?roomId=${roomId}&userId=${userId}&currentRound=${round}`,
+    );
+  };
+
+  const goToLobby = async () => {
+    await saveGameStatus({
+      isStarted: false,
+      startedAt: new Date(),
+      roomId: roomId,
+    });
+    const room = (await getData("rooms", roomId)) as any;
+    router.navigate(
+      `/game/lobby?id=${roomId}&userId=${userId}&roomCode=${room.roomCode}`,
     );
   };
 
@@ -143,11 +153,19 @@ export default function GameResult() {
         </TouchableOpacity>
       </Animated.View>
 
-      <Animated.View style={{ transform: [{ scale: scaleNext }] }}>
-        <TouchableOpacity style={styles.button} onPress={goNext}>
-          <Text style={styles.buttonText}>Continue to Next Round</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      {isLastRound === "true" ? (
+        <Animated.View style={{ transform: [{ scale: scaleNext }] }}>
+          <TouchableOpacity style={styles.button} onPress={goToLobby}>
+            <Text style={styles.buttonText}>Go to Lobby</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      ) : (
+        <Animated.View style={{ transform: [{ scale: scaleNext }] }}>
+          <TouchableOpacity style={styles.button} onPress={goNext}>
+            <Text style={styles.buttonText}>Continue to Next Round</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </View>
   );
 }

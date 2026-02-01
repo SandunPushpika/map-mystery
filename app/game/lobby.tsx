@@ -288,10 +288,10 @@ export default function Lobby() {
       return;
     }
 
-    // if (players.length < 2) {
-    //   Alert.alert("Error", "At least 2 players are required to start");
-    //   return;
-    // }
+    if (players.length < 2) {
+      Alert.alert("Error", "At least 2 players are required to start");
+      return;
+    }
 
     await onGameStart();
   };
@@ -312,12 +312,16 @@ export default function Lobby() {
     );
   };
 
+  const refreshPlayers = async () => {
+    if (room) await fetchPlayerList(id!, room);
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.navigate("/")}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color="#22D3EE" />
@@ -463,6 +467,17 @@ export default function Lobby() {
           </View>
         </View>
 
+        <View style={styles.playersHeader}>
+          <Text style={styles.sectionTitle}>Players</Text>
+
+          <TouchableOpacity
+            onPress={refreshPlayers}
+            style={styles.refreshButton}
+          >
+            <Ionicons name="refresh" size={18} color="#22D3EE" />
+          </TouchableOpacity>
+        </View>
+
         {/* Players */}
         <View style={styles.playerSection}>
           {players.map((player) => (
@@ -493,7 +508,7 @@ export default function Lobby() {
             },
           ]}
           onPress={handleStartGame}
-          disabled={false}
+          disabled={!isHost || players.length < 2}
         >
           <Text style={styles.startButtonText}>
             {isHost ? "Start Game" : "Waiting for Host..."}
@@ -687,5 +702,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+  },
+  playersHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+
+  refreshButton: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: "#0f172a",
   },
 });

@@ -21,7 +21,7 @@ import {
 
 export default function JoinRoom() {
   const scheme = useColorScheme();
-  const theme = Colors[scheme ?? "dark"];
+  const theme = Colors.dark;
   const [error, setError] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);

@@ -233,6 +233,27 @@ export const listenGameResultsByRoom = (
   return unsubscribe;
 };
 
+export const deleteExistingGameResult = async (
+  roomId: string,
+  userId: string,
+  round: number,
+) => {
+  const q = query(
+    collection(db, "gameResults"),
+    where("roomId", "==", roomId),
+    where("userId", "==", userId),
+    where("round", "==", round),
+  );
+
+  const snapshot = await getDocs(q);
+
+  const deletePromises = snapshot.docs.map((d) =>
+    deleteDoc(doc(db, "gameResults", d.id)),
+  );
+
+  await Promise.all(deletePromises);
+};
+
 export default {
   getCollection,
   saveData,

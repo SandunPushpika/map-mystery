@@ -5,6 +5,7 @@ import YearSlider from "@/components/YearSlider";
 import { Colors } from "@/constants/theme";
 import { GameResults, GameSettings } from "@/models/models";
 import {
+  deleteExistingGameResult,
   getData,
   getGameResultsByUser,
   saveData,
@@ -17,7 +18,7 @@ import { StyleSheet, Text, useColorScheme, View } from "react-native";
 export default function GameBoard() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const colorStyle = colorScheme == "dark" ? Colors.dark : Colors.light;
+  const colorStyle = Colors.dark;
   const { roomId, userId, currentRound } = useLocalSearchParams<{
     roomId: string;
     userId: string;
@@ -60,8 +61,9 @@ export default function GameBoard() {
 
   async function navigateToResults() {
     await saveGameResults();
+    const isLastRound = parseInt(currentRound) >= (gameSettings?.rounds || 5);
     router.navigate(
-      `/game/game-result?roomId=${roomId}&userId=${userId}&currentRound=${currentRound}`,
+      `/game/game-result?roomId=${roomId}&userId=${userId}&currentRound=${currentRound}&isLastRound=${isLastRound}`,
     );
   }
 
@@ -113,6 +115,7 @@ export default function GameBoard() {
       marks: total,
       totalMarks: fullTotal,
     };
+    await deleteExistingGameResult(roomId, userId, parseInt(currentRound) || 1);
     await saveData("gameResults", result);
   };
 
@@ -153,7 +156,9 @@ export default function GameBoard() {
       <RoundImage />
 
       <Text style={[styles.modeTitle, { color: colorStyle.text }]}>
-        Guess the Year & Location
+        {gameSettings?.mode === "Location Only"
+          ? "Guess the Location"
+          : "Guess the Year & Location"}
       </Text>
 
       {gameSettings?.mode === "Year & Location Guess" && (
